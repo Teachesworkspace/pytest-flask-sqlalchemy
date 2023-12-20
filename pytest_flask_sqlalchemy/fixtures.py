@@ -4,6 +4,16 @@ import contextlib
 import pytest
 import sqlalchemy as sa
 from packaging import version
+from flask_sqlalchemy import __version__ as flask_sqlalchemy_version
+
+try:
+    from greenlet import getcurrent as _ident_func
+except ImportError:
+    try:
+        from threading import get_ident as _ident_func
+    except ImportError:
+        # Python 2.7
+        from thread import get_ident as _ident_func
 
 
 @pytest.fixture(scope='module')
@@ -35,7 +45,11 @@ def _transaction(request, _db, mocker):
     # when specifying a `bind` option, or else Flask-SQLAlchemy won't scope
     # the connection properly
     options = dict(bind=connection, binds={})
-    session = _db.create_scoped_session(options=options)
+    if version.parse(flask_sqlalchemy_version) < version.parse('3.0.0'):
+        session = _db.create_scoped_session(options=options)
+    else:
+        options['scopefunc'] = _ident_func
+        session = _db._make_scoped_session(options=options)
 
     # Make sure the session, connection, and transaction can't be closed by accident in
     # the codebase
